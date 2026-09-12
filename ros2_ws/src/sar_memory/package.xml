@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>sar_memory</name>
+  <version>0.1.0</version>
+  <description>Shared semantic map / cognitive memory layer (O3).</description>
+  <maintainer email="sar-team@example.com">SAR Team</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>sar_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,7 @@
+# Training stack (CPU or GPU both fine; GPU: install the CUDA torch wheel)
+numpy>=1.24
+torch>=2.0
+pyyaml
+matplotlib
+pytest
+# optional: ultralytics  (only for model_type:=yolo detection in sim)

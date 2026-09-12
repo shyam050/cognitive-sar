@@ -1,0 +1,10 @@
+{
+  "description": "Allocation benchmark on 4 held-out maps x 2 episodes (abstract grid env, 3 robots, 32m world, 5 victims, 600-step cap). Policy: MAPPO ~148k steps (runs/mappo_v1). Values are mean +/- std across 4 episodes.",
+  "provenance": "training/evaluate.py runs of 2026-09-12; training curve from runs/mappo_v1 console logs (reports/training_curve.csv)",
+  "rows": [
+    {"policy": "rule_based", "mode": "deterministic", "coverage": [0.86, 0.05], "victims": [4.25, 0.83], "mean_detection_step": [49.0, 18.8], "mission_steps": [137.8, 47.0]},
+    {"policy": "mappo", "mode": "stochastic (deployment default)", "coverage": [0.85, 0.06], "victims": [3.25, 0.43], "mean_detection_step": [43.4, 17.8], "mission_steps": [443.5, 176.0]},
+    {"policy": "random", "mode": "stochastic", "coverage": [0.85, 0.04], "victims": [3.75, 1.09], "mean_detection_step": [57.4, 46.4], "mission_steps": [425.3, 188.9]},
+    {"policy": "mappo", "mode": "argmax", "coverage": [0.61, 0.11], "victims": [2.25, 0.43], "mean_detection_step": null, "mission_steps": [600.0, 0.0], "note": "argmax mode collapses at this training budget; deployment node defaults to sampling"}
+  ]
+}

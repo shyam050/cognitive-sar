@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>sar_slam</name>
+  <version>0.1.0</version>
+  <description>Per-robot SLAM config and the multi-robot map fusion node (O1).</description>
+  <maintainer email="sar-team@example.com">SAR Team</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <exec_depend>slam_toolbox</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

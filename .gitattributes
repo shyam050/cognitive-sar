@@ -1,0 +1,7 @@
+# Keep shell scripts executable-safe across Windows/WSL checkouts
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+
+# Windows junk
+*.bat text eol=crlf

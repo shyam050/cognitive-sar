@@ -1,0 +1,33 @@
+# ROS workspace build artefacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Training artefacts - exclude run outputs but keep the final checkpoints,
+# so they travel with the repo to other machines
+training/runs/*
+!training/runs/
+!training/runs/*/
+!training/runs/*/checkpoint_best.pt
+!training/runs/*/checkpoint_last.pt
+
+# Launch-time generated files
+/tmp/sar_*/
+sar_launch_*/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# node
+node_modules/
+package-lock.json
+
+# rendered slide previews (regenerate with make_deck.js + PowerPoint)
+reports/render/

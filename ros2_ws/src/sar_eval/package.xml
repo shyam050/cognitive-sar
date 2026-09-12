@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>sar_eval</name>
+  <version>0.1.0</version>
+  <description>Metric collection and experiment output for the SAR benchmarks (O5).</description>
+  <maintainer email="sar-team@example.com">SAR Team</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>sar_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
