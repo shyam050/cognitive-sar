@@ -31,3 +31,7 @@ package-lock.json
 
 # rendered slide previews (regenerate with make_deck.js + PowerPoint)
 reports/render/
+
+# report page previews (QA artifacts)
+reports/render_report/
+reports/DA2_Project_Report_preview.pdf
