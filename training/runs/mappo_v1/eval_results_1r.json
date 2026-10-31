@@ -1,0 +1,140 @@
+{
+  "robots": 1,
+  "deterministic": true,
+  "maps": 3,
+  "episodes": 2,
+  "results": {
+    "mappo_1r": [
+      {
+        "coverage": 0.25,
+        "victims": 1,
+        "mean_detection_step": 0.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.3276792598303778,
+        "victims": 1,
+        "mean_detection_step": 13.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.5196245733788396,
+        "victims": 1,
+        "mean_detection_step": 395.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.5503458877786318,
+        "victims": 2,
+        "mean_detection_step": 145.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.10680321872713973,
+        "victims": 0,
+        "mean_detection_step": NaN,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.3607266435986159,
+        "victims": 1,
+        "mean_detection_step": 37.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      }
+    ],
+    "rule_based_1r": [
+      {
+        "coverage": 0.2062043795620438,
+        "victims": 1,
+        "mean_detection_step": 0.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.2027756360832691,
+        "victims": 1,
+        "mean_detection_step": 20.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.7030716723549488,
+        "victims": 2,
+        "mean_detection_step": 126.5,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.6056879323597233,
+        "victims": 2,
+        "mean_detection_step": 66.5,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.3247988295537674,
+        "victims": 1,
+        "mean_detection_step": 69.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.3754325259515571,
+        "victims": 1,
+        "mean_detection_step": 49.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      }
+    ],
+    "random_1r": [
+      {
+        "coverage": 0.49452554744525545,
+        "victims": 1,
+        "mean_detection_step": 0.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.5983037779491134,
+        "victims": 2,
+        "mean_detection_step": 219.5,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.7781569965870307,
+        "victims": 1,
+        "mean_detection_step": 30.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.6056879323597233,
+        "victims": 1,
+        "mean_detection_step": 104.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.46744696415508413,
+        "victims": 2,
+        "mean_detection_step": 96.5,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      },
+      {
+        "coverage": 0.47664359861591693,
+        "victims": 1,
+        "mean_detection_step": 49.0,
+        "overlap_ratio": 0.0,
+        "steps": 600
+      }
+    ]
+  }
+}

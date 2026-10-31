@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 
 import numpy as np
 
@@ -56,24 +57,39 @@ def main():
     ap.add_argument("--maps", type=int, default=6)
     ap.add_argument("--episodes", type=int, default=4)
     ap.add_argument("--deterministic", type=int, default=1)
+    ap.add_argument("--robots", type=int, default=3,
+                    help="team size for the benchmark (1 = single-robot baseline, "
+                         "the config-A comparison from the build plan)")
     args = ap.parse_args()
 
+    env_cfg = replace(ENV, n_robots=args.robots)
+    tag = f"{args.robots}r"
     policies = [MAPPOPolicy(args.checkpoint, deterministic=bool(args.deterministic)),
                 RulePolicy(), RandomPolicy()]
     results = {}
     for pol in policies:
-        rows = eval_policy(pol, args)
-        results[pol.name] = rows
-        print(f"\n{pol.name} ({len(rows)} episodes)")
+        rows = []
+        for m in range(args.maps):
+            env = MultiAgentSAREnv(env_cfg, seed=10_000 + m * 100)
+            for e in range(args.episodes):
+                rows.append(run_episode(env, pol, seed=10_000 + m * 100 + e))
+                print(f"  [{pol.name}|{tag}] map {m + 1}/{args.maps} "
+                      f"ep {e + 1}/{args.episodes} -> cov {rows[-1]['coverage']:.0%}, "
+                      f"victims {rows[-1]['victims']}, {rows[-1]['steps']} steps",
+                      flush=True)
+        results[f"{pol.name}_{tag}"] = rows
+        print(f"\n{pol.name} ({len(rows)} episodes, {args.robots} robots)")
         for k in METRICS:
             vals = [r[k] for r in rows if not np.isnan(r[k])]
             if vals:
                 print(f"  {k:20s} {np.mean(vals):8.2f} ± {np.std(vals):6.2f}")
 
     out = os.path.join(os.path.dirname(os.path.abspath(args.checkpoint)),
-                       "eval_results.json")
+                       f"eval_results_{tag}.json")
     with open(out, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump({"robots": args.robots, "deterministic": bool(args.deterministic),
+                   "maps": args.maps, "episodes": args.episodes, "results": results}, f,
+                  indent=2)
     print(f"\nSaved {out}")
 
 

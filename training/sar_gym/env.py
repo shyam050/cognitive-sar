@@ -65,13 +65,16 @@ class MultiAgentSAREnv:
         _, n = frontiers[action]
         if n == 0:
             reward -= cfg.w_stale_region
+        region_changed = (w.assigned_region[i] != action)
         w.assigned_region[i] = action
         self.prev_actions[i] = action
 
-        # re-target occasionally (frontier centroids shift every step otherwise,
-        # forcing an A* recompute per step)
+        # re-target when the assignment changes or the target ages out: the
+        # executor must follow the allocator's latest decision, or adaptive
+        # policies get their choices silently vetoed for up to 8 steps
         self.target_age[i] += 1
-        if self.target_cell[i] is None or self.target_age[i] >= 8 or self.paths[i] == []:
+        if (self.target_cell[i] is None or self.target_age[i] >= 8
+                or region_changed or self.paths[i] == []):
             self.target_cell[i] = w.region_target_cell(action)
             self.target_age[i] = 0
             self.paths[i] = []

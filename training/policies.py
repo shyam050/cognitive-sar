@@ -53,10 +53,12 @@ class RulePolicy:
 class MAPPOPolicy:
     name = "mappo"
 
-    def __init__(self, checkpoint_path: str, device="cpu", deterministic=True):
+    def __init__(self, checkpoint_path: str, device="cpu", deterministic=True,
+                 mask_invalid=True):
         ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
         self.env_cfg = ckpt["env_cfg"]
         self.deterministic = deterministic
+        self.mask_invalid = mask_invalid
         self.device = device
         self.actor = ActorNet(self.env_cfg, PPO).to(device)
         self.actor.load_state_dict(ckpt["actor"])
@@ -71,6 +73,16 @@ class MAPPOPolicy:
                                   dtype=torch.float32, device=self.device)
             feats = self.actor(crops, aex)
             logits = self.actor.head(feats)
+            if self.mask_invalid:
+                # invalid-action masking: regions with no frontier left cannot be
+                # chosen (Huang et al. 2022). Regions are global, so one mask
+                # applies to the whole team.
+                rf = env.world.region_frontiers()
+                valid = torch.tensor(
+                    [1.0 if rf.get(a, (None, 0))[1] > 0 else 0.0
+                     for a in range(self.n_actions)], device=logits.device)
+                if valid.sum() > 0:
+                    logits = logits.masked_fill(valid == 0.0, -1e9)
             if self.deterministic:
                 actions = torch.argmax(logits, dim=-1)
             else:

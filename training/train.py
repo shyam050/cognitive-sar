@@ -85,7 +85,7 @@ def main():
     buf = RolloutBuffer(ppo_cfg.rollout_steps, env_cfg.n_robots,
                         crop_shape=(3, env_cfg.crop_size, env_cfg.crop_size),
                         glob_shape=((4 + env_cfg.n_robots, env_cfg.map_size, env_cfg.map_size),),
-                        device=device)
+                        device=device, n_actions=n_actions)
     buf.set_gae(ppo_cfg.gamma, ppo_cfg.gae_lambda)
 
     ep_reward, ep_start_time = 0.0, time.time()
@@ -99,13 +99,21 @@ def main():
         ppo_cfg.ent_coef = ppo_cfg.ent_coef + (ppo_cfg.ent_coef_min - ppo_cfg.ent_coef) * frac
 
         for _ in range(ppo_cfg.rollout_steps):
-            actions_np, logp, value = algo.act(obs)
+            # invalid-action mask: regions without frontiers cannot be chosen
+            rf = env.world.region_frontiers()
+            action_mask = np.array(
+                [1.0 if rf.get(a, (None, 0))[1] > 0 else 0.0
+                 for a in range(n_actions)], dtype=np.float32)
+            if action_mask.sum() == 0:
+                action_mask = None  # map fully explored; fall back to unmasked
+            actions_np, logp, value = algo.act(obs, action_mask=action_mask)
             obs_next, rewards, terminated, truncated, info = env.step(
                 {i: int(actions_np[i]) for i in range(env_cfg.n_robots)})
             rvec = np.array([rewards[i] for i in range(env_cfg.n_robots)], dtype=np.float32)
             done = terminated or truncated
             buf.add(obs, actions_np, logp, np.full(env_cfg.n_robots, value, np.float32),
-                    rvec, float(done))
+                    rvec, float(done), mask=None if action_mask is None
+                    else np.repeat(action_mask[None, :], env_cfg.n_robots, axis=0))
             ep_reward += float(rvec.sum())
             total_steps += 1
             obs = obs_next

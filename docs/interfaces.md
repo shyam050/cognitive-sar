@@ -50,7 +50,18 @@ Must match `training/mappo/networks.py::ActorNet` exactly: conv
 fc 304→128 (ReLU) → head 128→16. Verified by state-dict round-trip test:
 a checkpoint saved in training loads into the replica with identical logits.
 
-## 5. Semantic entry lifecycle
+## 6. Action semantics (added after the first benchmark round)
+
+- **Invalid-action masking**: regions with no frontier cells are masked out of
+  the actor's logits (`-1e9`) before sampling/argmax, identically in training
+  (`train.py` + `mappo/algo.py`), evaluation (`policies.py`) and deployment
+  (`sar_alloc_rl`). The stored log-probs therefore already reflect the mask,
+  keeping the PPO ratio consistent (Huang et al. 2022, invalid action masking).
+- **Executor follows the latest assignment**: when the allocator changes a
+  robot's region, the A* executor re-targets immediately (no 8-step grace
+  period). Adaptive policies get their decisions honored.
+
+## 7. Semantic entry lifecycle
 
 Detector publishes `SemanticEntry(id=0)`; `sar_memory` assigns stable ids and
 deduplicates entries of the same type within `dedup_radius` (1.0 m), keeping

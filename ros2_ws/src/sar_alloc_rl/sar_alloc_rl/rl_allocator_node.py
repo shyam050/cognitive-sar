@@ -126,6 +126,14 @@ class RLAllocatorNode(Node):
         bex = torch.as_tensor(np.stack([obs[r][1] for r in robots]))
         with torch.no_grad():
             logits = self.actor.head(self.actor(batch, bex))
+            # invalid-action masking: a region with no frontier is not a real
+            # option; masking it (Huang et al. 2022) prevents the argmax mode
+            # from parking robots on exhausted regions.
+            valid = torch.tensor(
+                [1.0 if r.has_frontier and r.size > 0 else 0.0
+                 for r in self.regions.regions], dtype=logits.dtype)
+            if valid.sum() > 0:
+                logits = logits.masked_fill(valid == 0.0, -1e9)
             if self.get_parameter("sample_actions").value:
                 actions = torch.distributions.Categorical(logits=logits).sample()
             else:

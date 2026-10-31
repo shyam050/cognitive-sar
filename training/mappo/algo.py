@@ -13,8 +13,13 @@ class MAPPO:
         self.opt_actor = torch.optim.Adam(actor.parameters(), lr=cfg.actor_lr)
         self.opt_critic = torch.optim.Adam(critic.parameters(), lr=cfg.critic_lr)
 
-    def act(self, obs, deterministic: bool = False):
-        """Sample actions for all robots. Returns (actions np(T,n), logp, values)."""
+    def act(self, obs, deterministic: bool = False, action_mask=None):
+        """Sample actions for all robots. Returns (actions np(n,), logp, value).
+
+        action_mask: optional per-team validity vector (n_actions,) with 1 for
+        legal actions. Applied identically here and in update(), so log-probs
+        stay consistent for the PPO ratio.
+        """
         with torch.no_grad():
             crops = torch.as_tensor(
                 np.stack([o[0] for o in obs["actor"]]), device=self.device)
@@ -22,6 +27,11 @@ class MAPPO:
                 np.stack([o[1] for o in obs["actor"]]), device=self.device)
             feats = self.actor(crops, aex)
             logits = self._actor_logits(feats)
+            if action_mask is not None:
+                m = torch.as_tensor(action_mask, dtype=logits.dtype,
+                                    device=logits.device)
+                if m.sum() > 0:
+                    logits = logits.masked_fill(m == 0.0, -1e9)
             dist = torch.distributions.Categorical(logits=logits)
             actions = torch.argmax(logits, dim=-1) if deterministic else dist.sample()
             logp = dist.log_prob(actions)
@@ -62,6 +72,8 @@ class MAPPO:
                 aex = data["aextras"][bt]
                 feats = self.actor(crops, aex)
                 logits = self._actor_logits(feats)
+                if "mask" in data:
+                    logits = logits.masked_fill(data["mask"][bt] == 0.0, -1e9)
                 dist = torch.distributions.Categorical(logits=logits)
                 logp = dist.log_prob(data["actions"][bt])
                 ratio = torch.exp(logp - data["logp"][bt])

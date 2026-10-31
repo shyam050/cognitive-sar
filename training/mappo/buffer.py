@@ -5,8 +5,10 @@ import torch
 
 
 class RolloutBuffer:
-    def __init__(self, steps: int, n_robots: int, crop_shape, glob_shape, device):
+    def __init__(self, steps: int, n_robots: int, crop_shape, glob_shape, device,
+                 n_actions: int = 0):
         self.T, self.n, self.device = steps, n_robots, device
+        self.A = n_actions
         self.crops = np.zeros((steps, n_robots) + crop_shape, dtype=np.float32)
         self.aextras = np.zeros((steps, n_robots, 4), dtype=np.float32)
         self.ggrid = np.zeros((steps,) + glob_shape[0], dtype=np.float32)
@@ -16,9 +18,11 @@ class RolloutBuffer:
         self.values = np.zeros((steps, n_robots), dtype=np.float32)
         self.rewards = np.zeros((steps, n_robots), dtype=np.float32)
         self.dones = np.zeros(steps, dtype=np.float32)
+        self.mask = (np.zeros((steps, n_robots, n_actions), dtype=np.float32)
+                     if n_actions else None)
         self.ptr = 0
 
-    def add(self, obs, actions, logp, values, rewards, done):
+    def add(self, obs, actions, logp, values, rewards, done, mask=None):
         t = self.ptr
         for i in range(self.n):
             self.crops[t, i] = obs["actor"][i][0]
@@ -30,6 +34,8 @@ class RolloutBuffer:
         self.values[t] = values
         self.rewards[t] = rewards
         self.dones[t] = done
+        if self.mask is not None and mask is not None:
+            self.mask[t] = mask
         self.ptr += 1
 
     def finalize(self, last_obs, critic):
@@ -52,7 +58,7 @@ class RolloutBuffer:
             adv[t] = lastgaelam
         returns = adv + self.values
         T, n = self.T, self.n
-        return {
+        out = {
             "crops": torch.as_tensor(self.crops.reshape(T * n, *self.crops.shape[2:]), device=self.device),
             "aextras": torch.as_tensor(self.aextras.reshape(T * n, -1), device=self.device),
             "ggrid": torch.as_tensor(np.repeat(self.ggrid, n, axis=0), device=self.device),
@@ -63,6 +69,9 @@ class RolloutBuffer:
             "adv": torch.as_tensor(adv.reshape(-1), device=self.device),
             "returns": torch.as_tensor(returns.reshape(-1), device=self.device),
         }
+        if self.mask is not None:
+            out["mask"] = torch.as_tensor(self.mask.reshape(T * n, -1), device=self.device)
+        return out
 
     gamma = 0.99
     lam = 0.95

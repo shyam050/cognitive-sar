@@ -72,13 +72,16 @@ print(torch.__version__, "CUDA:", torch.cuda.is_available())   # want CUDA: True
 
 ## Step 5 — Train
 
-**Fresh full run (recommended — clean curve for the report):**
+**Fresh full run (recommended).** The executor and action-masking semantics
+were corrected after the first training round, so a fresh run trains under the
+final semantics and gives a clean curve for the report:
 
 ```python
 !python train.py --steps 400000 --seed 0 --run-name mappo_v2
 ```
 
-**Or continue from the shipped ~148k checkpoint:**
+**Or continue from the shipped ~148k checkpoint** (it adapts to the corrected
+semantics after a few thousand steps, but its curve mixes the old regime):
 
 ```python
 !python train.py --steps 350000 --resume --run-name mappo_v1
@@ -104,16 +107,18 @@ df['reward_sum'].rolling(10).mean().plot(); plt.show()
 ```python
 !python evaluate.py --checkpoint runs/mappo_v2/checkpoint_best.pt --maps 6 --episodes 4
 !python evaluate.py --checkpoint runs/mappo_v2/checkpoint_best.pt --maps 6 --episodes 4 --deterministic 0
+# single-robot comparison (the abstract's "outperform independent single-robot search"):
+!python evaluate.py --checkpoint runs/mappo_v2/checkpoint_best.pt --maps 6 --episodes 4 --robots 1
 ```
 
 The first run is deterministic (argmax) — the strict test of whether the
 policy has converged. The second is stochastic sampling (the deployment
-default). `eval_results.json` lands next to the checkpoint with the full
-mappo vs rule_based vs random table.
+default). The third is the single-robot baseline row. Results land next to
+the checkpoint as `eval_results_3r.json` / `eval_results_1r.json`.
 
-**Good result to aim for:** argmax coverage ≥ 80% and victims ≥ rule baseline.
-Then the deterministic mode is deployment-ready; otherwise keep sampling mode
-and train longer.
+**Good result to aim for:** 3-robot argmax MAPPO ≥ rule-based on victims and
+mission steps, and both 3-robot configs beating every 1-robot config on
+coverage and detection time.
 
 ## Step 7 — Get the results back
 
