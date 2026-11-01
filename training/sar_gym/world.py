@@ -46,6 +46,7 @@ class GridWorld:
         # knowledge state
         self.explored = np.zeros((self.size, self.size), dtype=bool)
         self.owner = np.full((self.size, self.size), -1, dtype=np.int8)  # first observer robot
+        self.reobserved = np.zeros((self.size, self.size), dtype=bool)   # seen again by a non-owner
         self.robots = [list(s) for s in self.robot_starts]
         self.assigned_region = [None] * cfg.n_robots
         self.t = 0
@@ -103,8 +104,11 @@ class GridWorld:
                     if self.owner[rr, cc] == -1:
                         self.owner[rr, cc] = robot_idx
                         new_for_me.append((rr, cc))
-                    else:
-                        overlap += 1
+                elif self.owner[rr, cc] != robot_idx and not self.walls[rr, cc]:
+                    # a teammate already owns this cell and I am seeing it again:
+                    # one redundant-coverage event (and one re-observed cell)
+                    overlap += 1
+                    self.reobserved[rr, cc] = True
                 if self.walls[rr, cc]:
                     break
                 vi = self._victim_lookup.get((rr, cc))
@@ -220,8 +224,10 @@ class GridWorld:
         return n_known_free / max(n_free, 1)
 
     def overlap_ratio(self) -> float:
+        """Redundant-coverage ratio: unique cells re-observed by a non-owner
+        divided by all known free cells. Bounded [0, 1]."""
         known = int((self.explored & self.free).sum())
-        return self.overlap_cells / max(known, 1)
+        return int(self.reobserved.sum()) / max(known, 1)
 
     # ------------------------------------------------------------ observation
     def actor_obs(self, robot_idx: int) -> tuple:
