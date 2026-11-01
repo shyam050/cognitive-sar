@@ -1,0 +1,14 @@
+[
+  {
+    "policy": "mappo",
+    "reward": -475.45039999999955,
+    "coverage": 0.7314574707337347,
+    "victims": 3.0
+  },
+  {
+    "policy": "rule_based",
+    "reward": 104.19719999999973,
+    "coverage": 0.8623693416436682,
+    "victims": 4.2
+  }
+]

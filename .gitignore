@@ -37,3 +37,8 @@ reports/render_report/
 reports/DA2_Project_Report_preview.pdf
 reports/render_final/
 reports/Final_Project_Report_preview.pdf
+!training/runs/*/metrics.csv
+!training/runs/*/eval_results_*.json
+!training/runs/*/selfcheck.json
+!training/runs/*/config.json
+cognitive-sar_final.zip
