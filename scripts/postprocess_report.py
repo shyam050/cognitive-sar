@@ -5,9 +5,11 @@
 """
 import re
 import shutil
+import sys
 import zipfile
 
-SRC = r"C:\Users\Shyam\.zcode\workspace\default\cognitive-sar\reports\DA2_Project_Report.docx"
+SRC = sys.argv[1] if len(sys.argv) > 1 else \
+    r"C:\Users\Shyam\.zcode\workspace\default\cognitive-sar\reports\DA2_Project_Report.docx"
 TMP = SRC + ".tmp"
 
 with zipfile.ZipFile(SRC) as z:

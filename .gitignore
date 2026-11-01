@@ -35,3 +35,5 @@ reports/render/
 # report page previews (QA artifacts)
 reports/render_report/
 reports/DA2_Project_Report_preview.pdf
+reports/render_final/
+reports/Final_Project_Report_preview.pdf
