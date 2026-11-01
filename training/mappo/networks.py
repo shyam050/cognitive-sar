@@ -27,8 +27,9 @@ class ActorNet(nn.Module):
             nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),  # 6 -> 3
         )
         self.conv_out = 32 * (C // 4) * (C // 4)
-        self.extras = nn.Sequential(nn.Linear(4, 16), nn.ReLU())
-        self.trunk = nn.Sequential(nn.Linear(self.conv_out + 16, ppo_cfg.hidden), nn.ReLU())
+        ex_n = ObsSpec.actor_extras_n(env_cfg)
+        self.extras = nn.Sequential(nn.Linear(ex_n, 64), nn.ReLU())
+        self.trunk = nn.Sequential(nn.Linear(self.conv_out + 64, ppo_cfg.hidden), nn.ReLU())
         self.head = nn.Linear(ppo_cfg.hidden, ObsSpec.n_actions_from(env_cfg))
         _init(self, gain=1.4142)
         _init(self.head, gain=0.01)

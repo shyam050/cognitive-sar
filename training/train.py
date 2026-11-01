@@ -21,7 +21,7 @@ torch.set_num_threads(max(1, (os.cpu_count() or 4) // 2))
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import ENV, PPO                      # noqa: E402
+from config import ENV, PPO, ObsSpec             # noqa: E402
 from sar_gym import MultiAgentSAREnv             # noqa: E402
 from mappo import ActorNet, CriticNet, RolloutBuffer, MAPPO  # noqa: E402
 
@@ -85,7 +85,8 @@ def main():
     buf = RolloutBuffer(ppo_cfg.rollout_steps, env_cfg.n_robots,
                         crop_shape=(3, env_cfg.crop_size, env_cfg.crop_size),
                         glob_shape=((4 + env_cfg.n_robots, env_cfg.map_size, env_cfg.map_size),),
-                        device=device, n_actions=n_actions)
+                        device=device, n_actions=n_actions,
+                        extras_dim=ObsSpec.actor_extras_n(env_cfg))
     buf.set_gae(ppo_cfg.gamma, ppo_cfg.gae_lambda)
 
     ep_reward, ep_start_time = 0.0, time.time()
@@ -93,10 +94,12 @@ def main():
     best_recent = -1e9
     t_train = time.time()
 
+    ent_start = ppo_cfg.ent_coef
+    last_stats = {"entropy": float("nan"), "kl": float("nan"), "clipfrac": float("nan")}
     while total_steps < args.steps:
-        # linear entropy decay
+        # true linear entropy decay (the old form compounded and hit the floor early)
         frac = min(1.0, total_steps / ppo_cfg.ent_decay_steps)
-        ppo_cfg.ent_coef = ppo_cfg.ent_coef + (ppo_cfg.ent_coef_min - ppo_cfg.ent_coef) * frac
+        ppo_cfg.ent_coef = ent_start + (ppo_cfg.ent_coef_min - ent_start) * frac
 
         for _ in range(ppo_cfg.rollout_steps):
             # invalid-action mask: regions without frontiers cannot be chosen
@@ -111,8 +114,11 @@ def main():
                 {i: int(actions_np[i]) for i in range(env_cfg.n_robots)})
             rvec = np.array([rewards[i] for i in range(env_cfg.n_robots)], dtype=np.float32)
             done = terminated or truncated
-            buf.add(obs, actions_np, logp, np.full(env_cfg.n_robots, value, np.float32),
-                    rvec, float(done), mask=None if action_mask is None
+            # store the extras the actor actually saw (incl. choices of earlier robots)
+            obs_buf = dict(obs)
+            obs_buf["actor"] = [(o[0], algo.last_extras[i]) for i, o in enumerate(obs["actor"])]
+            buf.add(obs_buf, actions_np, logp, np.full(env_cfg.n_robots, value, np.float32),
+                    rvec * ppo_cfg.reward_scale, float(done), mask=None if action_mask is None
                     else np.repeat(action_mask[None, :], env_cfg.n_robots, axis=0))
             ep_reward += float(rvec.sum())
             total_steps += 1
@@ -122,7 +128,8 @@ def main():
                 row = [episode, info["steps"], round(ep_reward, 2),
                        round(info["coverage"], 4), info["victims"],
                        round(info["overlap_ratio"], 4),
-                       round(ppo_cfg.ent_coef, 5), "", round(time.time() - ep_start_time, 2)]
+                       round(last_stats["entropy"], 4), round(last_stats["kl"], 5),
+                       round(time.time() - ep_start_time, 2)]
                 writer.writerow(row)
                 recent.append((ep_reward, info["coverage"], info["victims"]))
                 if len(recent) > 10:
@@ -134,7 +141,8 @@ def main():
                     sps = total_steps / (time.time() - t_train)
                     print(f"ep {episode:4d} | steps {total_steps:7d} | reward {mr:8.1f} | "
                           f"coverage {mc:5.1%} | victims {mv:4.1f}/{info['n_victims']} | "
-                          f"{sps:5.0f} steps/s", flush=True)
+                          f"ent {last_stats['entropy']:.2f} kl {last_stats['kl']:.3f} "
+                          f"clip {last_stats['clipfrac']:.2f} | {sps:4.0f} steps/s", flush=True)
                 if len(recent) >= 10:
                     mr = np.mean([r for r, _, _ in recent])
                     if mr > best_recent:
@@ -147,6 +155,7 @@ def main():
 
         data = buf.finalize(obs, critic)
         stats = algo.update(data)
+        last_stats = stats
         buf.ptr = 0
         save(run_dir, "checkpoint_last.pt", actor, critic, env_cfg, total_steps)
 

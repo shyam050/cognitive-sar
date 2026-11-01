@@ -1,11 +1,12 @@
 """MAPPO allocation runtime node (O4) - decentralized execution half of CTDE.
 
 Builds the SAME observations the policy was trained on (via obs_contract.py,
-the frozen training<->deployment interface), runs the shared actor for each
-robot at a fixed rate and publishes /robot_i/goal region targets that Nav2
-executes.
+the frozen training<->deployment interface) and runs sequential region
+selection: robots pick one at a time, each seeing the regions chosen before it
+in this decision cycle (mirrors training/mappo/algo.py::sequential_select).
 
 Inputs: /map_merged, /regions, /semantic_map, TF map-><robot>_base_link.
+Publishes /robot_i/goal region targets that Nav2 executes.
 """
 
 import math
@@ -18,7 +19,8 @@ from nav_msgs.msg import OccupancyGrid
 from sar_msgs.msg import RegionArray, SemanticMap, SemanticEntry
 from tf2_ros import Buffer, TransformListener
 
-from .obs_contract import build_actor, downsample_to_grid, actor_obs, pose_to_cell
+from .obs_contract import (build_actor, downsample_to_grid, crop,
+                           base_extras, sequential_select, pose_to_cell)
 
 try:
     import torch
@@ -33,8 +35,9 @@ class RLAllocatorNode(Node):
         self.declare_parameter("checkpoint", "")
         self.declare_parameter("decision_rate", 1.0)
         self.declare_parameter("goal_tolerance", 0.8)
-        self.declare_parameter("sample_actions", True)   # argmax collapses a
-        # partially-trained policy; sampling matches the training-time behavior
+        self.declare_parameter("sample_actions", False)   # argmax by default;
+        # the v6 policy was trained under masking + sequential selection, so the
+        # deterministic mode is now stable (verify with evaluate.py --deterministic 1)
         self.declare_parameter("map_grid_size", 64)
         self.declare_parameter("world_size", 32.0)      # metres, ground truth
         self.declare_parameter("mission_timeout", 600.0)
@@ -58,18 +61,20 @@ class RLAllocatorNode(Node):
         self.n_victims = env_cfg.n_victims
         self.n_actions = env_cfg.region_grid[0] * env_cfg.region_grid[1]
         self.actor = build_actor({"crop_size": self.crop_size,
-                                  "n_actions": self.n_actions})
+                                  "n_actions": self.n_actions,
+                                  "extras_dim": 4 + 3 * self.n_actions})
         self.actor.load_state_dict(ckpt["actor"])
         self.actor.eval()
         self.get_logger().info(f"loaded policy {ckpt_path} "
-                               f"({self.n_actions} region actions)")
+                               f"({self.n_actions} region actions, "
+                               f"sequential selection)")
 
         self.tf = Buffer()
         TransformListener(self.tf, self)
         self.grid = None          # merged OccupancyGrid
         self.regions = None
         self.victim_count = 0
-        self.assignment = {}      # robot -> action
+        self.assignment = {}      # robot -> action (own-prev one-hot source)
         self.goals = {}
 
         self.create_subscription(OccupancyGrid, "/map_merged", self._on_map, 10)
@@ -101,49 +106,57 @@ class RLAllocatorNode(Node):
             data, g.info.resolution, g.info.origin.position.x,
             g.info.origin.position.y, self.S, self.world)
 
+        region_sizes = [float(r.size) for r in self.regions.regions]
+        mask = np.array([1.0 if r.has_frontier and r.size > 0 else 0.0
+                         for r in self.regions.regions], dtype=np.float32)
+        if mask.sum() == 0:
+            return  # nothing actionable anywhere; keep current goals
+
         tol = float(self.get_parameter("goal_tolerance").value)
         steps_frac = min((self.get_clock().now() - self.t0).nanosec / 1e9
                          / float(self.get_parameter("mission_timeout").value), 1.0)
 
-        obs, cells = {}, {}
+        crops, extras, cells = [], [], {}
         for robot in self.robots:
             try:
                 t = self.tf.lookup_transform("map", f"{robot}_base_link",
                                              rclpy.time.Time())
             except Exception:  # noqa: BLE001 - tf not ready yet
+                # robot without TF keeps its previous assignment in the
+                # sequential pass via the own-prev one-hot slot
+                cells[robot] = None
+                crops.append(None)
+                extras.append(None)
                 continue
             x, y = t.transform.translation.x, t.transform.translation.y
             r, c = pose_to_cell(x, y, self.S, self.world)
-            obs[robot] = actor_obs(wall, explored, frontier, r, c,
-                                   self.victim_count / max(self.n_victims, 1),
-                                   steps_frac, self.crop_size)
+            crop_t = np.stack([crop(wall, r, c, self.crop_size, self.S),
+                               crop(explored, r, c, self.crop_size, self.S),
+                               crop(frontier, r, c, self.crop_size, self.S)])
+            ex = base_extras(r, c,
+                             self.victim_count / max(self.n_victims, 1),
+                             steps_frac, region_sizes)
+            prev = self.assignment.get(robot)
+            if prev is not None:
+                ex[4 + 2 * self.n_actions + prev] = 1.0   # own previous region
+            crops.append(crop_t)
+            extras.append(ex)
             cells[robot] = (x, y)
-        if not obs:
+
+        actable = [i for i, c in enumerate(crops) if c is not None]
+        if not actable:
             return
 
-        robots = list(obs)
-        batch = torch.as_tensor(np.stack([obs[r][0] for r in robots]))
-        bex = torch.as_tensor(np.stack([obs[r][1] for r in robots]))
-        with torch.no_grad():
-            logits = self.actor.head(self.actor(batch, bex))
-            # invalid-action masking: a region with no frontier is not a real
-            # option; masking it (Huang et al. 2022) prevents the argmax mode
-            # from parking robots on exhausted regions.
-            valid = torch.tensor(
-                [1.0 if r.has_frontier and r.size > 0 else 0.0
-                 for r in self.regions.regions], dtype=logits.dtype)
-            if valid.sum() > 0:
-                logits = logits.masked_fill(valid == 0.0, -1e9)
-            if self.get_parameter("sample_actions").value:
-                actions = torch.distributions.Categorical(logits=logits).sample()
-            else:
-                actions = torch.argmax(logits, dim=-1)
-            actions = actions.tolist()
+        actions, _ = sequential_select(
+            self.actor, [crops[i] for i in actable],
+            [extras[i] for i in actable], self.n_actions, mask=mask,
+            deterministic=not bool(self.get_parameter("sample_actions").value))
 
         claims = dict(self.assignment)
-        for robot, a in zip(robots, actions):
-            a = int(a)
-            arrived = (robot in self.goals
+        for k, i in enumerate(actable):
+            robot = self.robots[i]
+            a = actions[k]
+            arrived = (robot in self.goals and cells[robot] is not None
                        and math.hypot(cells[robot][0] - self.goals[robot][0],
                                       cells[robot][1] - self.goals[robot][1]) < tol)
             changed = claims.get(robot) != a

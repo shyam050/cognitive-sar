@@ -25,14 +25,16 @@ class EnvConfig:
     # reward weights
     w_explore: float = 0.10       # per newly explored cell (first observer)
     w_victim: float = 10.0        # per victim newly located
-    w_overlap: float = 0.02       # per cell re-observed that another robot explored first
-    w_step: float = 0.01          # per-step time penalty
+    w_overlap: float = 0.002      # per cell sensed by this robot and another robot in the same step
+    w_step: float = 0.05          # per-step time penalty (mission speed must matter)
+    w_dup: float = 0.2            # per robot: another robot was sent to the same region this step
     w_stale_region: float = 0.05  # chosen a region that currently has no frontier
 
 
 @dataclass
 class PPOConfig:
-    rollout_steps: int = 1000     # env steps per rollout (x n_robots agent samples)
+    rollout_steps: int = 512      # env steps per rollout (x n_robots agent samples)
+    reward_scale: float = 0.1     # scale rewards seen by PPO (returns were std~10 vs a 0.2 value clip)
     gamma: float = 0.99
     gae_lambda: float = 0.95
     clip: float = 0.2
@@ -54,7 +56,10 @@ class ObsSpec:
     """Exact observation contract (mirrored by sar_alloc_rl on the ROS side)."""
     crop_size: int = 13
     crop_channels: tuple = ("wall", "explored", "frontier")
-    actor_extras: tuple = ("x_norm", "y_norm", "victims_frac", "steps_frac")
+    actor_extras: tuple = ("x_norm", "y_norm", "victims_frac", "steps_frac",
+                           "region_frontier_frac x n_regions",
+                           "others_claimed x n_regions",
+                           "own_prev_region_onehot x n_regions")
     critic_channels: tuple = ("wall", "explored", "frontier", "victims_found",
                               "robot_onehot_x n_robots")
     critic_extras: tuple = ("coverage", "victims_frac", "steps_frac")
@@ -63,6 +68,10 @@ class ObsSpec:
     @staticmethod
     def n_actions_from(env: EnvConfig) -> int:
         return env.region_grid[0] * env.region_grid[1]
+
+    @staticmethod
+    def actor_extras_n(env: EnvConfig) -> int:
+        return 4 + 3 * (env.region_grid[0] * env.region_grid[1])
 
     @staticmethod
     def critic_channels_n(env: EnvConfig) -> int:

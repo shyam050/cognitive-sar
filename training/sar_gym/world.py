@@ -57,6 +57,8 @@ class GridWorld:
         self._frontier = None
         self._region_frontiers = None
         self._ray_steps = np.arange(0.5, cfg.fov_range + 0.01, 0.5)
+        self.new_victims = {}     # robot_idx -> victims located this step
+        self.footprint = {}       # robot_idx -> set of cells sensed this step
 
         # initial sweep
         for i in range(cfg.n_robots):
@@ -88,10 +90,16 @@ class GridWorld:
 
     # --------------------------------------------------------------- sensing
     def _sense(self, robot_idx: int) -> tuple:
-        """Raycast FOV sweep. Returns (newly_explored_by_me, overlapped_cells)."""
+        """Raycast FOV sweep. Returns (newly_explored_by_me, footprint_cells).
+
+        Also records: victims located this step (new_victims), and the
+        re-observed mask (cells already explored by a teammate, seen again).
+        """
         r0, c0 = self.robots[robot_idx]
         rng_ = self.cfg.fov_range
-        new_for_me, overlap = [], 0
+        new_for_me = []
+        footprint = set()
+        n_new_victims = 0
         for k in range(self.cfg.fov_rays):
             ang = 2.0 * np.pi * k / self.cfg.fov_rays
             dr, dc = cos(ang), sin(ang)
@@ -99,6 +107,7 @@ class GridWorld:
                 rr, cc = int(round(r0 + step * dr)), int(round(c0 + step * dc))
                 if not (0 <= rr < self.size and 0 <= cc < self.size):
                     break
+                footprint.add((rr, cc))
                 if not self.explored[rr, cc]:
                     self.explored[rr, cc] = True
                     if self.owner[rr, cc] == -1:
@@ -107,7 +116,6 @@ class GridWorld:
                 elif self.owner[rr, cc] != robot_idx and not self.walls[rr, cc]:
                     # a teammate already owns this cell and I am seeing it again:
                     # one redundant-coverage event (and one re-observed cell)
-                    overlap += 1
                     self.reobserved[rr, cc] = True
                 if self.walls[rr, cc]:
                     break
@@ -115,7 +123,10 @@ class GridWorld:
                 if vi is not None and not self.victim_found[vi]:
                     self.victim_found[vi] = True
                     self.victim_detect_step[vi] = self.t
-        return new_for_me, overlap
+                    n_new_victims += 1
+        self.new_victims[robot_idx] = n_new_victims
+        self.footprint[robot_idx] = footprint
+        return new_for_me, footprint
 
     # ------------------------------------------------------------- frontiers
     def frontier_mask(self) -> np.ndarray:
@@ -231,7 +242,14 @@ class GridWorld:
 
     # ------------------------------------------------------------ observation
     def actor_obs(self, robot_idx: int) -> tuple:
-        """(crop (3,C,C) float32, extras (4,) float32) — mirrored by sar_alloc_rl."""
+        """(crop (3,C,C) float32, extras (52,) float32) — mirrored by sar_alloc_rl.
+
+        Extras layout (A = n_regions):
+          [0:4]      x_norm, y_norm, victims_frac, steps_frac
+          [4:4+A]    relative frontier mass per region
+          [4+A:4+2A] regions claimed by teammates (filled by sequential selection)
+          [4+2A:4+3A] own previous region one-hot
+        """
         C = self.cfg.crop_size
         half = C // 2
         r, c = self.robots[robot_idx]
@@ -239,11 +257,23 @@ class GridWorld:
         expl_c = _crop(self.explored.astype(np.float32), r, c, half, C)
         front_c = _crop(self.frontier_mask().astype(np.float32), r, c, half, C)
         crop = np.stack([wall_c, expl_c, front_c]).astype(np.float32)
-        extras = np.array([
+        base = np.array([
             r / (self.size - 1), c / (self.size - 1),
             self.victim_found.sum() / max(self.n_victims, 1),
             self.t / self.cfg.max_steps,
         ], dtype=np.float32)
+        nreg = self.cfg.region_grid[0] * self.cfg.region_grid[1]
+        rf = self.region_frontiers()
+        counts = np.array([rf[k][1] for k in range(nreg)], dtype=np.float32)
+        front = counts / max(float(counts.max()), 1.0)       # relative frontier mass per region
+        claimed = np.zeros(nreg, dtype=np.float32)           # regions other robots are heading to
+        for j, a in enumerate(self.assigned_region):
+            if j != robot_idx and a is not None:
+                claimed[a] = 1.0
+        own = np.zeros(nreg, dtype=np.float32)
+        if self.assigned_region[robot_idx] is not None:
+            own[self.assigned_region[robot_idx]] = 1.0
+        extras = np.concatenate([base, front, claimed, own]).astype(np.float32)
         return crop, extras
 
     def critic_obs(self) -> tuple:

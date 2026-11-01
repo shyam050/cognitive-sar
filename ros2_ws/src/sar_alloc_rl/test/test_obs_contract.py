@@ -11,8 +11,9 @@ import sys
 import numpy as np
 import pytest
 
-from sar_alloc_rl.obs_contract import build_actor, crop, downsample_to_grid, \
-    actor_obs, pose_to_cell
+from sar_alloc_rl.obs_contract import (build_actor, crop, downsample_to_grid,
+                                       base_extras, sequential_select,
+                                       pose_to_cell)
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
 
@@ -58,6 +59,34 @@ def test_crop_matches_training():
         assert np.allclose(crop(a, r, c, 13, 64), train_crop(a, r, c, 6, 13))
 
 
+def test_base_extras_layout():
+    """52 values: [0:4] base, [4:20] frontier mass, claimed+own zero-filled."""
+    ex = base_extras(10, 20, 0.4, 0.5, [3, 0, 5, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0])
+    assert ex.shape == (52,)
+    assert np.isclose(ex[0], 10 / 63) and np.isclose(ex[1], 20 / 63)
+    assert np.isclose(ex[2], 0.4) and np.isclose(ex[3], 0.5)
+    assert np.isclose(ex[4], 3 / 5) and np.isclose(ex[5], 0.0) and np.isclose(ex[6], 1.0)
+    assert np.allclose(ex[20:52], 0.0)                       # claimed + own slots
+
+
+def test_sequential_select_fills_claimed():
+    """Second robot's claimed slot must mark the region the first robot chose."""
+    pytest.importorskip("torch")
+    replica = build_actor({"crop_size": 13, "n_actions": 16, "extras_dim": 52})
+    crops = [np.zeros((3, 13, 13), np.float32) for _ in range(2)]
+    extras = [base_extras(5, 5, 0.0, 0.0, [1] * 16) for _ in range(2)]
+    actions, used = sequential_select(replica, crops, extras, 16,
+                                      mask=None, deterministic=True)
+    assert len(actions) == 2
+    # deployment picks in index order: robot 0 chooses first (claimed slot
+    # empty, since robot 1 has no previous assignment), robot 1 sees robot 0's
+    # pick in its claimed slot
+    assert used[0][20:36].sum() == 0.0
+    assert used[1][20:36].sum() == 1.0
+    assert used[1][20 + actions[0]] == 1.0
+
+
 def test_actor_state_dict_roundtrip():
     """A checkpoint saved by the training ActorNet must load into the replica
     and produce identical logits."""
@@ -70,15 +99,16 @@ def test_actor_state_dict_roundtrip():
     class Cfg:
         crop_size = 13
         n_actions = 16
-        region_grid = (4, 4)   # training ActorNet derives n_actions from this
+        region_grid = (4, 4)   # training ActorNet derives extras/n_actions from this
 
     train_actor = TrainActor(Cfg(), PPO)
-    replica = build_actor({"crop_size": 13, "n_actions": 16}, PPO.hidden)
+    replica = build_actor({"crop_size": 13, "n_actions": 16,
+                           "extras_dim": 4 + 3 * 16}, PPO.hidden)
     replica.load_state_dict(train_actor.state_dict())
     replica.eval()
 
     crop_t = torch.randn(2, 3, 13, 13)
-    ex = torch.randn(2, 4)
+    ex = torch.randn(2, 52)
     with torch.no_grad():
         lt = train_actor.head(train_actor(crop_t, ex))
         lr = replica.head(replica(crop_t, ex))
@@ -89,12 +119,3 @@ def test_pose_to_cell():
     assert pose_to_cell(0.0, 0.0, 64, 32.0) == (0, 0)
     assert pose_to_cell(31.9, 31.9, 64, 32.0) == (63, 63)
     assert pose_to_cell(16.0, 8.0, 64, 32.0) == (16, 32)
-
-
-def test_actor_obs_shapes():
-    wall = np.zeros((64, 64), np.float32)
-    expl = np.ones((64, 64), np.float32)
-    front = np.zeros((64, 64), np.float32)
-    c, e = actor_obs(wall, expl, front, 10, 20, 0.4, 0.5, 13)
-    assert c.shape == (3, 13, 13) and e.shape == (4,)
-    assert abs(e[0] - 10 / 63) < 1e-6 and abs(e[3] - 0.5) < 1e-6

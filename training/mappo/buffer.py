@@ -6,11 +6,11 @@ import torch
 
 class RolloutBuffer:
     def __init__(self, steps: int, n_robots: int, crop_shape, glob_shape, device,
-                 n_actions: int = 0):
+                 n_actions: int = 0, extras_dim: int = 4):
         self.T, self.n, self.device = steps, n_robots, device
         self.A = n_actions
         self.crops = np.zeros((steps, n_robots) + crop_shape, dtype=np.float32)
-        self.aextras = np.zeros((steps, n_robots, 4), dtype=np.float32)
+        self.aextras = np.zeros((steps, n_robots, extras_dim), dtype=np.float32)
         self.ggrid = np.zeros((steps,) + glob_shape[0], dtype=np.float32)
         self.gextras = np.zeros((steps, 3), dtype=np.float32)
         self.actions = np.zeros((steps, n_robots), dtype=np.int64)

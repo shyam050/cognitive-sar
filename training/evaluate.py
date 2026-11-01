@@ -17,7 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import ENV                          # noqa: E402
 from sar_gym import MultiAgentSAREnv            # noqa: E402
-from policies import MAPPOPolicy, RulePolicy, RandomPolicy  # noqa: E402
+from policies import (MAPPOPolicy, RulePolicy, RandomPolicy, RandomMaskedPolicy,  # noqa: E402
+                      StickyRandomPolicy, StickyUnclaimedPolicy)  # noqa: E402
 
 METRICS = ("coverage", "victims", "mean_detection_step", "overlap_ratio", "steps")
 
@@ -65,7 +66,8 @@ def main():
     env_cfg = replace(ENV, n_robots=args.robots)
     tag = f"{args.robots}r"
     policies = [MAPPOPolicy(args.checkpoint, deterministic=bool(args.deterministic)),
-                RulePolicy(), RandomPolicy()]
+                RulePolicy(), StickyUnclaimedPolicy(), StickyRandomPolicy(),
+                RandomMaskedPolicy(), RandomPolicy()]
     results = {}
     for pol in policies:
         rows = []

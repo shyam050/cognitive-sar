@@ -46,10 +46,19 @@ class MultiAgentSAREnv:
         w.t += 1
         # second sense pass: robots observe from their new cell
         for i in range(self.cfg.n_robots):
-            new_cells, overlap = w._sense(i)
+            new_cells, _ = w._sense(i)
             rewards[i] += self.cfg.w_explore * len(new_cells)
+            rewards[i] += self.cfg.w_victim * w.new_victims[i]
+        # overlap = cells sensed by this robot AND another robot this step (simultaneous re-search)
+        for i in range(self.cfg.n_robots):
+            others = set().union(*[w.footprint[j] for j in range(self.cfg.n_robots) if j != i])
+            overlap = len(w.footprint[i] & others)
             rewards[i] -= self.cfg.w_overlap * overlap
-            w.overlap_cells += overlap
+        # duplicate allocation: two robots sent to the same region this step
+        for i in range(self.cfg.n_robots):
+            if any(self.prev_actions[j] == self.prev_actions[i]
+                   for j in range(self.cfg.n_robots) if j != i):
+                rewards[i] -= self.cfg.w_dup
         w.invalidate()
 
         terminated = (w.coverage() >= self.cfg.coverage_target

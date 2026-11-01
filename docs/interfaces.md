@@ -61,7 +61,29 @@ a checkpoint saved in training loads into the replica with identical logits.
   robot's region, the A* executor re-targets immediately (no 8-step grace
   period). Adaptive policies get their decisions honored.
 
-## 7. Semantic entry lifecycle
+## 7. Actor-extras layout v2 + sequential selection (mappo_v6 contract)
+
+The actor extras grew from 4 to 52 values (A = n_regions = 16):
+
+| Slot | Values | Meaning |
+|---|---|---|
+| `[0:4]` | 4 | x_norm, y_norm, victims_frac, steps_frac |
+| `[4:4+A]` | A | relative frontier mass per region (frontier cells / max) |
+| `[4+A:4+2A]` | A | regions claimed by teammates this decision round |
+| `[4+2A:4+3A]` | A | own previous region one-hot |
+
+- **Sequential selection** (`training/mappo/algo.py::sequential_select`, ported
+  to `sar_alloc_rl/obs_contract.py`): robots pick one at a time, each seeing the
+  regions chosen before it this round in the claimed slot (plus the previous
+  assignment of robots yet to pick). Training randomises the order; deployment
+  picks in robot index order. The extras actually shown to the actor are stored
+  for PPO replay.
+- **Deployment extras source**: `[4:4+A]` comes from `/regions` `size` fields;
+  claimed is filled by the deployment-side sequential pass; own-prev comes from
+  the node's last assignment. Implemented in `sar_alloc_rl/obs_contract.py`.
+- `mappo_v6` checkpoints require this contract (extras_dim = 52).
+
+## 8. Semantic entry lifecycle
 
 Detector publishes `SemanticEntry(id=0)`; `sar_memory` assigns stable ids and
 deduplicates entries of the same type within `dedup_radius` (1.0 m), keeping
