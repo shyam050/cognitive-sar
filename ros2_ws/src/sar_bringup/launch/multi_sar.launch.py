@@ -38,6 +38,10 @@ def _launch_setup(context, *args, **kwargs):
     use_nav2 = LaunchConfiguration("use_nav2").perform(context).lower() in ("1", "true")
     with_rviz = LaunchConfiguration("rviz").perform(context).lower() in ("1", "true")
     world_arg = LaunchConfiguration("world").perform(context)
+    # headless: run the Gazebo SERVER only (no Gazebo GUI window). RViz stays
+    # available and becomes the sole visual - the right mode for GPU-less
+    # laptops where the Gazebo GUI dies under WSLg software rendering.
+    headless = LaunchConfiguration("headless").perform(context).lower() in ("1", "true")
 
     sar_worlds = get_package_share_directory("sar_worlds")
     sar_robot = get_package_share_directory("sar_robot")
@@ -63,7 +67,7 @@ def _launch_setup(context, *args, **kwargs):
     actions.append(IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(
             get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")),
-        launch_arguments={"gz_args": f"-r {world}"}.items()))
+        launch_arguments={"gz_args": ("-s -r " if headless else "-r ") + world}.items()))
 
     for i, name in enumerate(robots):
         x, y, yaw = spawns[i % len(spawns)]
@@ -173,5 +177,6 @@ def generate_launch_description():
         DeclareLaunchArgument("world", default_value="default"),
         DeclareLaunchArgument("use_nav2", default_value="true"),
         DeclareLaunchArgument("rviz", default_value="true"),
+        DeclareLaunchArgument("headless", default_value="false"),
         OpaqueFunction(function=_launch_setup),
     ])
