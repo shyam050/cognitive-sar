@@ -19,7 +19,7 @@ const bu = () => ({ code: "2022", indent: 10, color: "9CA3AF" });
 
 // training curve (reports/training_curve.csv, logged every 10 episodes, 3-pt smoothed)
 const EP = [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200,210,220,230,240,250,260,270,280,290,300,310,320,330,340];
-const REW_RAW = [77.4,76.7,61.5,69.2,79.7,82.5,64.9,73.9,56.7,51.1,58.5,69.4,79.3,52.8,56.7,62.0,61.4,60.6,76.5,58.0,53.7,56.0,49.2,72.7,62.1,49.5,82.3,52.7,46.7,67.2,67.8,75.0,65.5,56.6];
+const REW_RAW = [-165.6,-249.5,-316.0,-325.5,-258.2,-323.1,-231.0,-224.5,-117.6,-230.2,-315.1,-261.0,-71.4,-222.6,-161.0,-190.3,-259.4,-194.3,-221.4,-224.6,-286.2,-95.9,-324.1,-170.5,-278.2,-261.8,-178.1,-68.5,-267.1,-277.6,-132.7,-218.1,-284.2,-244.0,-254.8,-296.6,-258.5,-193.7,-196.7,-186.5,-150.8,-206.2,-238.2,-298.4,-161.4,-346.7,-246.7,-147.9];
 const smooth = (a, k=3) => a.map((_, i) => { const s = a.slice(Math.max(0,i-k+1), i+1); return s.reduce((x,y)=>x+y,0)/s.length; });
 const REW = smooth(REW_RAW).map(v => Math.round(v * 10) / 10);
 const epLabels = EP.map((e, i) => (i % 5 === 0 || i === EP.length - 1 ? String(e) : ""));
@@ -131,7 +131,7 @@ s.addNotes("Be straight about O4/O5: built and running, but the learned policy h
 /* ------------------------------------------------ 5 · WHAT GOT BUILT */
 s = pres.addSlide(); s.background = { color: BG };
 header(s, "What has been built so far");
-const stats = [["11", "ROS 2 packages"], ["43", "Python modules"], ["9", "unit tests passing"], ["341", "training episodes logged"]];
+const stats = [["11", "ROS 2 packages"], ["43", "Python modules"], ["10", "unit tests passing"], ["480", "training episodes logged"]];
 stats.forEach((st, i) => {
   const x = M + i * 3.13;
   s.addText(st[0], { x, y: 1.5, w: 2.9, h: 0.65, fontFace: F, fontSize: 32, bold: true, color: i === 0 ? ACCENT : DARKTXT, margin: 0 });
@@ -180,18 +180,18 @@ s.addChart(pres.charts.LINE, [{ name: "Episodic reward", labels: epLabels, value
   chartColors: [ACCENT], lineSize: 2.5, lineSmooth: true,
   chartArea: { fill: { color: "FFFFFF" } },
   catAxisTitle: "training episode (logged every 10)", catAxisTitleColor: MUTED, showCatAxisTitle: true,
-  valAxisTitle: "episodic reward", valAxisTitleColor: MUTED, showValAxisTitle: true,
+  valAxisTitle: "episodic reward (team sum)", valAxisTitleColor: MUTED, showValAxisTitle: true,
   catAxisLabelColor: MUTED, valAxisLabelColor: MUTED, catAxisLabelFontSize: 11, valAxisLabelFontSize: 11,
   valGridLine: { color: "ECEEF1", size: 0.5 }, catGridLine: { style: "none" },
-  showLegend: false, valAxisMinVal: 30, valAxisMaxVal: 90,
+  showLegend: false, valAxisMinVal: -360, valAxisMaxVal: 0,
 });
 s.addText("What the curve shows", { x: 9.1, y: 1.6, w: 3.7, h: 0.3, fontFace: F, fontSize: 14, bold: true, color: DARKTXT, margin: 0 });
 s.addText([
-  { text: "Map coverage settled at 83-86% early in training and stayed there.", options: { bullet: bu(), breakLine: true } },
-  { text: "Reward plateaus around 66-74: the basic behaviour (spread out, do not re-search, pick up victims) is learned within the first third.", options: { bullet: bu(), breakLine: true } },
-  { text: "The remaining steps did not yet convert into beating the rule baseline - see next slide.", options: { bullet: bu() } },
+  { text: "Map coverage settled in the 80-87% band after a noisy first quarter and held there.", options: { bullet: bu(), breakLine: true } },
+  { text: "The raw reward is negative by design (time and duplicate penalties); the informative trace is coverage. Policy entropy fell from 2.1 to under 0.5 - still sharpening when the run ended.", options: { bullet: bu(), breakLine: true } },
+  { text: "200k steps on a free Colab GPU took 46 minutes; the run is resumable for more.", options: { bullet: bu() } },
 ], { x: 9.1, y: 1.95, w: 3.75, h: 4.0, fontFace: F, fontSize: 12.5, color: INK, paraSpaceAfter: 12, margin: 0, valign: "top" });
-source(s, "Data: training/runs/mappo_v1, 34 checkpoints over ~148k environment steps (MAPPO, 3 agents, GAE 0.95, lr 3e-4).");
+source(s, "Data: training/runs/mappo_v6, 48 checkpoints over ~198k environment steps (MAPPO, 3 agents, corrected semantics).");
 s.addNotes("Read it honestly: the learning happened early and then plateaued. That is why the benchmark is at parity, not dominance, and why a longer run is the next step.");
 
 /* ------------------------------------------------ 8 · BENCHMARK */
@@ -199,24 +199,25 @@ s = pres.addSlide(); s.background = { color: BG };
 header(s, "Benchmark: learned policy vs baselines");
 const bench = (x, title, values, maxV, unit, note) => {
   s.addText(title, { x, y: 1.5, w: 5.9, h: 0.3, fontFace: F, fontSize: 13.5, bold: true, color: DARKTXT, margin: 0 });
-  s.addChart(pres.charts.BAR, [{ name: title, labels: ["Rule-based", "MAPPO", "Random"], values }], {
+  s.addChart(pres.charts.BAR, [{ name: title, labels: ["Rule-based", "Sticky-unclaimed", "MAPPO", "Random"], values }], {
     x, y: 1.85, w: 5.9, h: 3.0, barDir: "col", barGapWidthPct: 80,
     chartColors: ["7B8494"], barGrouping: "clustered",
     chartArea: { fill: { color: "FFFFFF" } },
-    catAxisLabelColor: MUTED, valAxisLabelColor: MUTED, catAxisLabelFontSize: 12, valAxisLabelFontSize: 11,
+    catAxisLabelColor: MUTED, valAxisLabelColor: MUTED, catAxisLabelFontSize: 10, valAxisLabelFontSize: 11,
     valGridLine: { color: "ECEEF1", size: 0.5 }, catGridLine: { style: "none" },
     showValue: true, dataLabelPosition: "outEnd", dataLabelColor: DARKTXT, dataLabelFontSize: 12, dataLabelFontBold: true,
+    dataLabelFormatCode: unit === 1 ? "0.00" : "0",
     showLegend: false, valAxisMinVal: 0, valAxisMaxVal: maxV, valAxisMajorUnit: unit,
   });
   s.addText(note, { x, y: 4.9, w: 5.9, h: 0.55, fontFace: F, fontSize: 12, color: MUTED, margin: 0 });
 };
-bench(M, "Victims located (of 5), higher is better", [4.25, 3.25, 3.75], 5, 1,
-      "Rule-based finds 1 victim more on average.");
-bench(6.93, "Mission steps until finished, lower is better", [138, 444, 425], 600, 100,
-      "Rule-based finishes most missions early; MAPPO often runs to the step cap.");
-s.addText("Map coverage: 85-86% for all three policies (no significant difference).   Time to first detection: MAPPO 43 steps, rule-based 49, random 57.", { x: M, y: 5.6, w: 12.3, h: 0.35, fontFace: F, fontSize: 13, color: INK, margin: 0 });
-s.addText("Summary: greedy frontier allocation is a strong baseline and the learned policy has not beaten it yet at ~150k training steps. Where the learned policy already looks better is detection speed; victims and mission time need more training.", { x: M, y: 6.0, w: 12.3, h: 0.6, fontFace: F, fontSize: 13, color: INK, margin: 0 });
-source(s, "Data: training/evaluate.py, 4 held-out maps x 2 episodes, 3 robots, 600-step cap. Full table: reports/benchmark_summary.json.");
+bench(M, "Victims located (of 5), higher is better", [3.92, 4.08, 3.75, 2.79], 5, 1,
+      "The learned policy is within noise of the greedy rule on victims.");
+bench(6.93, "Mission steps until finished, lower is better", [196, 139, 357, 600], 600, 100,
+      "The sticky commitment heuristics finish missions fastest.");
+s.addText("Coverage: sticky 89%, MAPPO 86%, rule 83%, random 68%.   Single-robot teams manage only 27-42% coverage - the multi-robot claim from our abstract holds decisively.", { x: M, y: 5.6, w: 12.3, h: 0.35, fontFace: F, fontSize: 13, color: INK, margin: 0 });
+s.addText("Summary: in deployment mode the learned policy matches the greedy rule (86% vs 83% coverage; 3.75 vs 3.92 victims). The surprise: two trivial commitment heuristics we tested set the mission-time bar. Argmax mode had not converged at 200k steps.", { x: M, y: 6.0, w: 12.3, h: 0.6, fontFace: F, fontSize: 13, color: INK, margin: 0 });
+source(s, "Data: training/evaluate.py, 6 held-out maps x 4 episodes per policy, 3 robots, 600-step cap. Full tables: reports/benchmark_summary.json.");
 s.addNotes("Do not hide the negative result. If asked why greedy wins: pure frontier coverage is close to greedy-optimal; our hypothesis is that learned use of semantics (victim priors) pays off with more training and in the full simulator.");
 
 /* ------------------------------------------------ 9 · FINDINGS */
@@ -231,8 +232,8 @@ s.addText([
 ], { x: M, y: 1.9, w: 5.9, h: 3.4, fontFace: F, fontSize: 13, color: INK, paraSpaceAfter: 12, margin: 0, valign: "top" });
 s.addText("Not there yet  ->  our plan", { x: 6.9, y: 1.5, w: 5.95, h: 0.32, fontFace: F, fontSize: 15, bold: true, color: ACCENT, margin: 0 });
 s.addText([
-  { text: "Victims found per mission still trails the greedy baseline.  Plan: 300-500k more training steps on a Colab GPU (2-3 hours) and a reward-weight tune.", options: { bullet: bu(), breakLine: true } },
-  { text: "Deterministic (argmax) policy gets stuck at this training level.  Plan: keep sampling at deployment (already the default), re-test after longer training.", options: { bullet: bu(), breakLine: true } },
+  { text: "Mission time (357 steps) trails the sticky commitment baselines (139).  Plan: keep the sequential-selection structure and train longer; the policy was still sharpening at 200k steps.", options: { bullet: bu(), breakLine: true } },
+  { text: "Deterministic (argmax) mode still trails its sampled self (76% vs 86% coverage).  Plan: more training steps, then re-test; deployment keeps sampling meanwhile.", options: { bullet: bu(), breakLine: true } },
   { text: "Benchmarks so far are in the abstract environment.  Plan: run the Gazebo-level experiment matrix (10 runs per allocator), then the report.", options: { bullet: bu() } },
 ], { x: 6.9, y: 1.9, w: 5.95, h: 3.4, fontFace: F, fontSize: 13, color: INK, paraSpaceAfter: 12, margin: 0, valign: "top" });
 s.addShape(pres.shapes.LINE, { x: M, y: 5.6, w: W - 2 * M, h: 0, line: { color: HAIR, width: 0.75 } });

@@ -1,10 +1,27 @@
 {
-  "description": "Allocation benchmark on 4 held-out maps x 2 episodes (abstract grid env, 3 robots, 32m world, 5 victims, 600-step cap). Policy: MAPPO ~148k steps (runs/mappo_v1). Values are mean +/- std across 4 episodes.",
-  "provenance": "training/evaluate.py runs of 2026-09-12; training curve from runs/mappo_v1 console logs (reports/training_curve.csv)",
-  "rows": [
-    {"policy": "rule_based", "mode": "deterministic", "coverage": [0.86, 0.05], "victims": [4.25, 0.83], "mean_detection_step": [49.0, 18.8], "mission_steps": [137.8, 47.0]},
-    {"policy": "mappo", "mode": "stochastic (deployment default)", "coverage": [0.85, 0.06], "victims": [3.25, 0.43], "mean_detection_step": [43.4, 17.8], "mission_steps": [443.5, 176.0]},
-    {"policy": "random", "mode": "stochastic", "coverage": [0.85, 0.04], "victims": [3.75, 1.09], "mean_detection_step": [57.4, 46.4], "mission_steps": [425.3, 188.9]},
-    {"policy": "mappo", "mode": "argmax", "coverage": [0.61, 0.11], "victims": [2.25, 0.43], "mean_detection_step": null, "mission_steps": [600.0, 0.0], "note": "argmax mode collapses at this training budget; deployment node defaults to sampling"}
+  "description": "Final allocation benchmark (repo code, mappo_v6 checkpoint, 200k steps, corrected semantics). 6 held-out maps x 4 episodes per policy = 24 episodes; 3 robots, 5 victims, 600-step cap unless noted. Values are mean +/- std.",
+  "provenance": "training/evaluate.py runs of 2026-11 (Colab T4), repo commit with mappo_v6 contract (52-extras, sequential selection, invalid-action masking). Argmax = deterministic mode; sampled = deployment default (sample_actions:=true).",
+  "three_robots": {
+    "mappo_sampled":  {"coverage": [0.86, 0.06], "victims": [3.75, 0.66], "mean_detection_step": [56.5, 59.0], "overlap_ratio": [0.63, 0.15], "mission_steps": [357, 200]},
+    "mappo_argmax":   {"coverage": [0.76, 0.12], "victims": [3.33, 0.80], "mean_detection_step": [22.5, 20.6], "overlap_ratio": [0.52, 0.14], "mission_steps": [507, 183]},
+    "rule_based":     {"coverage": [0.83, 0.12], "victims": [3.92, 0.95], "mean_detection_step": [29.4, 19.1], "overlap_ratio": [0.26, 0.15], "mission_steps": [196, 184]},
+    "sticky_unclaimed":{"coverage": [0.89, 0.04], "victims": [4.08, 0.64], "mean_detection_step": [31.4, 17.3], "overlap_ratio": [0.59, 0.15], "mission_steps": [139, 101]},
+    "sticky_random":  {"coverage": [0.89, 0.03], "victims": [4.00, 0.71], "mean_detection_step": [41.7, 24.1], "overlap_ratio": [0.59, 0.17], "mission_steps": [187, 161]},
+    "random_masked":  {"coverage": [0.71, 0.10], "victims": [3.04, 1.06], "mean_detection_step": [35.8, 41.1], "overlap_ratio": [0.48, 0.13], "mission_steps": [581, 63]},
+    "random":         {"coverage": [0.68, 0.08], "victims": [2.79, 0.82], "mean_detection_step": [22.2, 40.9], "overlap_ratio": [0.45, 0.10], "mission_steps": [600, 0]}
+  },
+  "single_robot_stochastic": {
+    "mappo":            {"coverage": [0.27, 0.18], "victims": [0.96, 0.73], "mission_steps": [600, 0]},
+    "rule_based":       {"coverage": [0.29, 0.23], "victims": [1.21, 1.12], "mission_steps": [583, 83]},
+    "sticky_unclaimed": {"coverage": [0.42, 0.28], "victims": [1.58, 1.29], "mission_steps": [559, 101]},
+    "sticky_random":    {"coverage": [0.37, 0.27], "victims": [1.42, 1.19], "mission_steps": [569, 76]},
+    "random_masked":    {"coverage": [0.34, 0.16], "victims": [1.29, 0.79], "mission_steps": [597, 15]},
+    "random":           {"coverage": [0.35, 0.10], "victims": [0.96, 0.54], "mission_steps": [600, 0]}
+  },
+  "key_findings": [
+    "Every three-robot configuration outperformed every single-robot configuration (lowest 3-robot coverage 76% argmax > highest single-robot 42%).",
+    "MAPPO in deployment mode (sampled) matches the greedy rule: coverage 86% vs 83%, victims 3.75 vs 3.92 (within one std); the rule finishes faster (196 vs 357 steps).",
+    "Simple commitment heuristics (sticky-unclaimed: keep region until exhausted, never poach a teammate's) set the bar: 89% coverage, 4.08 victims, 139 steps.",
+    "MAPPO argmax had not fully converged at 200k steps (76% coverage, 12/24 episodes hitting the step cap); policy entropy was still declining when training stopped."
   ]
 }

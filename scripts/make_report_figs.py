@@ -71,44 +71,56 @@ plt.savefig(os.path.join(OUT, "fig_architecture.png"), dpi=200, bbox_inches="tig
 plt.close()
 
 # ---------------------------------------------------------------- Fig 2: training curve
-eps, rews = [], []
-with open(os.path.join(OUT, "training_curve.csv")) as f:
+src = os.path.join(OUT, "training_curve_v6.csv")   # final-semantics run (mappo_v6)
+if not os.path.exists(src):
+    src = os.path.join(OUT, "training_curve.csv")
+eps, rews, covs = [], [], []
+with open(src) as f:
     for row in csv.DictReader(f):
         eps.append(int(row["episode"])); rews.append(float(row["reward"]))
+        covs.append(float(row["coverage_pct"]))
 def smooth(a, k=3):
     return [sum(a[max(0, i-k+1):i+1])/len(a[max(0, i-k+1):i+1]) for i in range(len(a))]
-fig, ax = plt.subplots(figsize=(9, 4.6))
+fig, (ax, ax2) = plt.subplots(2, 1, figsize=(9, 5.6), sharex=True)
 ax.plot(eps, rews, color=C_MAPPO, alpha=0.30, lw=1.2, label="per-episode reward")
 ax.plot(eps, smooth(rews), color=C_MAPPO, lw=2.4, label="smoothed (3-pt)")
-ax.set_xlabel("training episode (logged every 10)")
-ax.set_ylabel("episodic reward")
-ax.set_ylim(30, 90)
+ax.set_ylabel("episodic reward (team sum)")
 ax.grid(True, alpha=0.3, color=GRID)
-ax.legend(frameon=False, loc="lower right")
+ax.legend(frameon=False, loc="lower right", fontsize=9)
+ax2.plot(eps, covs, color=C_RULE, lw=2.0, label="map coverage")
+ax2.axhline(90, color=MUTED, lw=1.0, ls="--", alpha=0.6)
+ax2.text(eps[1], 90.6, "90% coverage target", fontsize=8.5, color=MUTED)
+ax2.set_xlabel("training episode (logged every 10)")
+ax2.set_ylabel("map coverage (%)")
+ax2.set_ylim(60, 95)
+ax2.grid(True, alpha=0.3, color=GRID)
+ax2.legend(frameon=False, loc="lower right", fontsize=9)
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig_training.png"), dpi=200, bbox_inches="tight")
 plt.close()
 
 # ---------------------------------------------------------------- Fig 3: benchmark
-labels = ["Rule-based", "MAPPO", "Random"]
-victims = [4.25, 3.25, 3.75]; victims_err = [0.83, 0.43, 1.09]
-steps = [138, 444, 425]; steps_err = [47, 176, 189]
-colors = [C_RULE, C_MAPPO, C_RAND]
-fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.2))
-axes[0].bar(labels, victims, yerr=victims_err, capsize=4, color=colors, width=0.55)
+labels = ["Rule-based", "MAPPO", "Sticky-\nunclaimed", "Sticky-\nrandom", "Random\n(masked)", "Random"]
+victims = [3.92, 3.75, 4.08, 4.00, 3.04, 2.79]; victims_err = [0.95, 0.66, 0.64, 0.71, 1.06, 0.82]
+steps = [196, 357, 139, 187, 581, 600]; steps_err = [184, 200, 101, 161, 63, 0]
+colors = [C_RULE, C_MAPPO, "#7BA68A", "#C49B72", "#9687A8", "#B0B0B0"]
+fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
+axes[0].bar(labels, victims, yerr=victims_err, capsize=4, color=colors, width=0.6)
 axes[0].set_ylabel("victims located (of 5)")
 axes[0].set_title("Victims found (higher is better)", fontsize=11)
 axes[0].set_ylim(0, 5.6); axes[0].grid(True, axis="y", alpha=0.3, color=GRID)
+axes[0].tick_params(axis="x", labelsize=8.5)
 for i, v in enumerate(victims):
-    axes[0].text(i, v + victims_err[i] + 0.15, f"{v:.2f}", ha="center", fontsize=9.5)
-axes[1].bar(labels, steps, yerr=steps_err, capsize=4, color=colors, width=0.55)
-axes[1].set_ylabel("mission steps until finish")
+    axes[0].text(i, v + victims_err[i] + 0.15, f"{v:.2f}", ha="center", fontsize=9)
+axes[1].bar(labels, steps, yerr=steps_err, capsize=4, color=colors, width=0.6)
+axes[1].set_ylabel("mission steps until finished")
 axes[1].set_title("Mission duration (lower is better)", fontsize=11)
-axes[1].set_ylim(0, 720); axes[1].grid(True, axis="y", alpha=0.3, color=GRID)
+axes[1].set_ylim(0, 760); axes[1].grid(True, axis="y", alpha=0.3, color=GRID)
+axes[1].tick_params(axis="x", labelsize=8.5)
 for i, v in enumerate(steps):
-    axes[1].text(i, v + steps_err[i] + 18, str(v), ha="center", fontsize=9.5)
+    axes[1].text(i, v + steps_err[i] + 20, str(v), ha="center", fontsize=9)
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig_benchmark.png"), dpi=200, bbox_inches="tight")
 plt.close()
 
-print("figures written:", os.listdir(OUT))
+print("figures written:", sorted(f for f in os.listdir(OUT) if f.endswith(".png")))
